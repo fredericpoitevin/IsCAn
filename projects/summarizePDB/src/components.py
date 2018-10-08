@@ -12,20 +12,104 @@ from scipy import linalg
 # higher-level functions #
 ##########################
 
-#def traj_summarize(traj,ids,v,x)
+def filter(traj,ids,pc_thresh=0.75,ic_thresh=1.0,fun='logcosh',algo='parallel',do_plot=False,title=''):
+# identify and remove outliers
+    # initialize
+    traj_new, ids_new = traj_slice(traj,ids)
+    it=0
+    iterate=True
+    # iterate
+    while iterate :
+        print('=================')
+        print('Iteration #',it)
+        subtitle=title+'outlier_iter'+str(it)
+        traj_old, ids_old = traj_slice(traj_new, ids_new)
+        v_ica, m_ica, x_ica = analyses(traj_old,ids_old,pc_thresh=pc_thresh,fun=fun,algo=algo,do_plot=do_plot,title=subtitle)
+        idx_remains = np.arange(len(ids_old))
+        n_outlier=0
+        for iPC in np.arange(len(x_ica[0,:])):
+            keyword=subtitle+'_IC'+str(iPC)
+            idx_remains, idx_outlier = get_outlier(x_ica[:,iPC],idx_remains,vmax=ic_thresh)
+            if(len(idx_outlier)>0):
+                save_traj(traj_old,ids_old,idx_outlier,keyword=keyword,verbose='full')
+                n_outlier+=1
+        if(n_outlier==0):
+            iterate=False
+            print('converged in ',it,' iterations')
+        else:
+            it+=1
+            traj_new, ids_new = traj_slice(traj_old, ids_old, index=idx_remains)
+    return traj_new,ids_new
 
-#def traj_split(traj,ids,v,m,x,iIC=0,vrange=[-0.2,0.2]):
-# isolate snapshots that are not within vrange along iIC
-    
-#def traj_sort(traj,ids,v,m,x,iIC=0,vrange=[-0.2,0.2],project=False,exclude=True):
-# purpose: sort traj along iIC
+def cluster(traj,ids,pc_thresh=0.75,fun='logcosh',algo='parallel',analysis_type='ica',do_plot=True,title=''):
+    # perform ICA
+    v,m,x = analyses(traj,ids,pc_thresh=pc_thresh,fun=fun,algo=algo,analysis_type='ica',do_plot=False,title=title)
+    negent_ave, negent_var = ave_score(x,len(x[0,:]),fun=fun)
+    # get pairwise distances. note that metric can be a function you've defined
+    p = scipy.spatial.distance.pdist(x, metric='minkowski',p=2,w=negent_ave)
+    # perform ward clustering
+    clusters = scipy.cluster.hierarchy.linkage(p, method='ward')
+    if(do_plot):
+        plot_cluster(clusters,x,figname=title)
+    return clusters
+
+def analyses(traj,ids,pc_thresh=0.75,fun='logcosh',algo='parallel',analysis_type='ica',do_plot=True,c=None,title=''):
+# purpose: perform pca, to reduce dimensionality, then ica to identify relevant projections
+# options: 
+#   analysis_type: 'pca' or 'ica'
+#   do_plot: True or False
+#
+    v_pca, l_pca, x = traj2pc(traj, n_components=len(ids),var_trunc=pc_thresh)
+    if(do_plot):
+        print('Principal Component Analysis (step 0)')
+        plot_stats_CA(x,l_pca,len(l_pca),threshold=0,analysis_type='pca',figname=title)
+    if(analysis_type == 'ica'):
+        v_ica, m_ica, x_ica = traj2ic(x,n_components=len(l_pca),fun=fun,algo=algo)
+        x = x_ica
+        if(len(l_pca)>1 and do_plot):
+            print('Independent Component Analysis (step 1)')
+            plot_stats_CA(x,m_ica,len(l_pca),threshold=0,figname=title)
+    if(do_plot):
+        print('projection of data in component space')
+        biplots(x,n=np.minimum(10,len(l_pca)),nbins=30,c=c,figname=title)
+    if(analysis_type == 'ica'):
+        return v_ica, m_ica, x
+    else:
+        return v_pca, l_pca, x
+
+def save_ICmode(traj,ids,v,m,x,nICs=np.arange(1),vmax=0.2,mode='oscillatory',exclude=True,keyword='mode',pc_thresh=0.75,verbose='minimal'):
+# purpose: write traj along iIC
     # options:
-    # > project: project each snapshot on component (remove contribution from others)
+    # > mode: 'oscillatory': 
+    #           or 'sorted':
     # > exclude: exclude snapshots that lie further than vrange away in any other direction
-
-#def trajIC():
-# Question: maybe also write oscillating movie and sorted movie (try to remove those that are not well aligned with IC)
-# as an option, write traj out without the ids we have split
+    nframe=20
+    xyz     = traj.xyz.reshape(traj.n_frames, traj.n_atoms * 3)
+    xyz_mean = np.mean(xyz, axis=0)
+    v_pca, l_pca, x_pca = traj2pc(traj, n_components=len(ids),var_trunc=pc_thresh)
+    xyz_ic = np.dot(v,v_pca)
+    for iIC in nICs:
+        filename=keyword+'_'+mode+'_IC'+str(iIC+1)+".pdb"
+        if(mode=='oscillatory'):
+            traj_tmp = traj[0:nframe]
+            for iframe in np.arange(0,nframe,1):
+                phase = iframe*2.*np.pi/nframe
+                traj_tmp.xyz[iframe:iframe+1,:] = 10*xyz_ic[iIC:iIC+1,:].reshape(1,traj.n_atoms,3)*np.cos(phase)
+                traj_tmp.xyz[iframe:iframe+1,:] += xyz_mean.reshape(traj.n_atoms,3)
+        elif(mode=='sorted'):
+            index = np.argsort(x[:,iIC])
+            id_kp=index
+            if(exclude):
+                for jIC in nICs:
+                    if(jIC!=iIC):
+                        id1,id2 = get_outlier(x[:,jIC],index,vmax=vmax)
+                        id1 = np.setdiff1d(id_kp,id2)
+                        id_kp = id1
+            index = np.argsort(x[id_kp,iIC])
+            traj_tmp,ids_tmp = traj_slice(traj,ids,index=index)
+        traj_tmp.save(filename) 
+        if(verbose=='full'):
+            print("wrote ",filename)
 
 def save_traj(traj,ids,idx,keyword='traj',save_mean=False,verbose='minimal'):
     if(len(idx) > 0):
@@ -44,7 +128,7 @@ def save_traj(traj,ids,idx,keyword='traj',save_mean=False,verbose='minimal'):
             xyz_bfac = np.sum(xyz_std2.reshape(n_atoms, 3), axis=1)*8*(np.pi)**2
             traj_mean = traj_new[0]
             traj_mean.xyz = xyz_mean.reshape(n_atoms, 3)
-            traj_mean.save(filename, bfactors=xyz_bfac)
+            traj_mean.save(filename, bfactors=np.clip(xyz_bfac, -9, 99))
         else:
             traj_new.save(filename)
         # add info of ID list at beginning
@@ -59,61 +143,6 @@ def save_traj(traj,ids,idx,keyword='traj',save_mean=False,verbose='minimal'):
             f.write(save)
         if(verbose=='full'):
             print('wrote ',filename,' : ',ids[idx])
-
-def traj_analyses(traj,ids,pc_thresh=0.9,fun='logcosh',algo='parallel',analysis_type='ica',do_plot=True,c=None):
-# purpose: perform pca, to reduce dimensionality, then ica to identify relevant projections
-# options: 
-#   analysis_type: 'pca' or 'ica'
-#   do_plot: True or False
-#
-    v_pca, l_pca, x = traj2pc(traj, n_components=len(ids),var_trunc=pc_thresh)
-    if(do_plot):
-        print('Principal Component Analysis (step 0)')
-        plot_stats_CA(x,l_pca,len(l_pca),threshold=0,analysis_type='pca')
-    if(analysis_type == 'ica'):
-        v_ica, m_ica, x_ica = traj2ic(x,n_components=len(l_pca),fun=fun,algo=algo)
-        x = x_ica
-        if(len(l_pca)>1 and do_plot):
-            print('Independent Component Analysis (step 1)')
-            plot_stats_CA(x,m_ica,len(l_pca),threshold=0)
-    if(do_plot):
-        print('projection of data in component space')
-        biplots(x,n=np.minimum(10,len(l_pca)),nbins=30,c=c)
-    if(analysis_type == 'ica'):
-        return v_ica, m_ica, x
-    else:
-        return v_pca, l_pca, x
-
-def traj_filter(traj,ids,pc_thresh=0.9,ic_thresh=0.9,fun='logcosh',algo='parallel',do_plot=True,title=''):
-# identify and remove outliers
-    # initialize
-    traj_new, ids_new = traj_slice(traj,ids)
-    it=0
-    iterate=True
-    # iterate
-    while iterate :
-        print('=================')
-        print('Iteration #',it)
-        traj_old, ids_old = traj_slice(traj_new, ids_new)
-        v_ica, m_ica, x_ica = traj_analyses(traj_old,ids_old,pc_thresh=pc_thresh,fun=fun,algo=algo,do_plot=do_plot)
-        idx_remains = np.arange(len(ids_old))
-        n_outlier=0
-        for iPC in np.arange(len(x_ica[0,:])):
-            keyword=title+'outlier_iter'+str(it)+'_IC'+str(iPC)
-            idx_remains, idx_outlier = get_outlier(x_ica[:,iPC],idx_remains,vmax=ic_thresh)
-            if(len(idx_outlier)>0):
-                save_traj(traj_old,ids_old,idx_outlier,keyword=keyword,verbose='full')
-                n_outlier+=1
-        if(n_outlier==0):
-            iterate=False
-            print('converged in ',it,' iterations')
-        else:
-            it+=1
-            #keyword='remains_iter'+str(it)
-            #save_traj(traj_old,ids_old,idx_remains,keyword=keyword)
-            traj_new, ids_new = traj_slice(traj_old, ids_old, index=idx_remains)
-    return traj_new,ids_new
-
 
 def traj2pc(traj,n_components=1,negent_sort=False,var_trunc=-1):
     n_cmpnt = n_components
@@ -150,17 +179,7 @@ def traj2ic(x_pc,n_components=1,fun='logcosh',algo='parallel',negent_sort=True):
 # Clustering #
 ##############
 
-def traj_cluster_run(traj,ids,pc_thresh=0.9,fun='logcosh',algo='parallel',analysis_type='ica'):
-    # perform ICA
-    v,m,x = traj_analyses(traj,ids,pc_thresh=pc_thresh,fun=fun,algo=algo,analysis_type='ica',do_plot=False)
-    negent_ave, negent_var = ave_score(x,len(x[0,:]),fun=fun)
-    # get pairwise distances. note that metric can be a function you've defined
-    p = scipy.spatial.distance.pdist(x, metric='minkowski',p=2,w=negent_ave)
-    # perform ward clustering
-    l = scipy.cluster.hierarchy.linkage(p, method='ward')
-    return l,v,m,x,negent_ave,negent_var
-
-def traj_cluster_split(traj,ids,l,n_clusters,title=''):
+def cluster_split(traj,ids,l,n_clusters,title=''):
     # get assignment
     assignments = get_assignment(l,n_clusters) #scipy.cluster.hierarchy.fcluster(l, t=n_clusters, criterion='maxclust')
     # do the split
@@ -210,7 +229,8 @@ def get_truncate_order(L,threshold=0.9):
 def truncate_svd(U,L,V,n=-1):
     if(n==-1):
         n=L.shape[0]
-    Ul = U[:,0:n]
+    #Ul = U[:,0:n]
+    Ul = U[0:n,:]
     Ll = L[0:n]
     Vl = V[:,0:n]
     return Ul, Ll, Vl
@@ -296,10 +316,14 @@ def plot_component(component,figsize=(12,6)):
     plt.tight_layout()
     plt.show()
 
-def biplots(prj,n=1,plottype='hexbin',nbins=10,figsize=-1,c=None):
+def biplots(prj,n=1,plottype='hexbin',nbins=10,figsize=-1,c=None,figname=''):
 # plot populations in component space
     if c is not None:
         plottype='scatter'
+    if(plottype=='scatter'):
+        cmap='rainbow'
+    else:
+        cmap='plasma'
     if(figsize < 0 ):
         if(n == 1):
             figsize=1
@@ -310,7 +334,7 @@ def biplots(prj,n=1,plottype='hexbin',nbins=10,figsize=-1,c=None):
     fig = plt.figure(figsize=(figsize,figsize), dpi= 160, facecolor='w', edgecolor='k')
     nrow=n
     ncol=n
-    color_hexbin='plasma'
+    #color_hexbin='plasma'
     nbins_coarse = int(nbins/1)
     nbox=1 #nrow
     for i in np.arange(0,n,1):
@@ -330,20 +354,30 @@ def biplots(prj,n=1,plottype='hexbin',nbins=10,figsize=-1,c=None):
                     Ax = prj[:,j]
                     Ay = prj[:,i]
                     if(plottype == 'scatter'):
-                        plt.scatter(Ax, Ay, c=c, cmap=color_hexbin)
+                        plt.scatter(Ax, Ay, c=c, cmap=cmap)
                     else:
-                        plt.hexbin(Ax, Ay, gridsize=nbins, cmap=color_hexbin, mincnt=1)
+                        plt.hexbin(Ax, Ay, gridsize=nbins, cmap=cmap, mincnt=1)
             elif(i==j):
                 ax = fig.add_subplot(nrow,ncol,nbox)
                 plt.grid()
                 Ax = prj[:,i]
                 plt.hist(Ax,bins=nbins_coarse)
-            #else:
+            else:
+                if(i == 1):
+                    if(j == 0):
+                        ax = fig.add_subplot(nrow,ncol,nbox)
+                        ax.set_xlabel('cluster color')
+                        xy = range(1,np.max(c)+1,1)
+                        z = xy
+                        sc = plt.scatter(xy, xy, c=z, vmin=1, vmax=np.max(c), cmap=cmap)
+                        plt.colorbar(sc)
             nbox=nbox+1
     plt.tight_layout()
     plt.show()
+    if(figname):
+        fig.savefig(figname+'_biplot.png')
 
-def plot_stats_CA(prj,l,n_components=1,fun='logcosh',threshold=0.9,niter=100,span=True,figsize=-1,analysis_type='ica'):
+def plot_stats_CA(prj,l,n_components=1,fun='logcosh',threshold=0.9,niter=100,span=True,figsize=-1,analysis_type='ica',figname=''):
     # Preplotting...
     if(figsize < 0 ):
         if(n_components == 1):
@@ -355,7 +389,7 @@ def plot_stats_CA(prj,l,n_components=1,fun='logcosh',threshold=0.9,niter=100,spa
     prj_GVs = np.random.randn(len(prj[:,0]),n_components)/np.sqrt(len(prj[:,0]))
     GVscore, GVscore_var = ave_score(prj_GVs,n_components,niter,fun)
     CVscore, CVscore_var = ave_score(prj,n_components,niter,fun)
-    plt.figure(figsize=(figsize, figsize/2), dpi= 160, facecolor='w', edgecolor='k')
+    fig = plt.figure(figsize=(figsize, figsize/2), dpi= 160, facecolor='w', edgecolor='k')
     nrow=1 #nrow=2
     ncol=2 #ncol=1
     idx=1
@@ -379,7 +413,7 @@ def plot_stats_CA(prj,l,n_components=1,fun='logcosh',threshold=0.9,niter=100,spa
             plt.xlabel('ID')
             plt.ylabel('variance ratio')
             plt.plot(range(1,1+len(var)), var, 'ko')
-            plt.plot(range(1,1+len(var)), np.cumsum(var), 'k+')
+            #plt.plot(range(1,1+len(var)), np.cumsum(var), 'k+')
             plt.axhline(y=threshold, color='r', linestyle='-')
         idx+=1
     # - NEGENTROPY
@@ -406,25 +440,29 @@ def plot_stats_CA(prj,l,n_components=1,fun='logcosh',threshold=0.9,niter=100,spa
     #
     plt.tight_layout()
     plt.show()
+    if(figname):
+        fig.savefig(figname+'_'+analysis_type+'_stats.png')
 
-def plot_cluster(l,x,figsize=12):
-    plt.figure(figsize=(figsize, figsize), dpi= 160, facecolor='w', edgecolor='k')
+def plot_cluster(clusters,x,figsize=12,figname=''):
+    fig = plt.figure(figsize=(figsize, figsize), dpi= 160, facecolor='w', edgecolor='k')
     nrow=2
     ncol=1
     # look at the number of natural clusters using the linkage object
     plt.subplot(nrow,ncol,1)
-    plt.scatter(np.arange(1,len(x)), l[:,2][::-1])
+    plt.scatter(np.arange(1,len(x)), clusters[:,2][::-1])
     plt.title('Objective function change', fontsize=15)
     plt.ylabel('Variance', fontsize=13)
     plt.xlabel('Number of macrostates', fontsize=13)
     # see dendogram
     plt.subplot(nrow,ncol,2)
-    scipy.cluster.hierarchy.dendrogram(l, labels=np.arange(len(x)))
+    scipy.cluster.hierarchy.dendrogram(clusters, labels=np.arange(len(x)))
     plt.xticks(fontsize=13)
     plt.title('Ward linkage', fontsize=15)
     #
     plt.tight_layout()
     plt.show()
+    if(figname):
+        fig.savefig(figname+'_cluster.png')
 
 
 def plot_mixing(m_ica):
