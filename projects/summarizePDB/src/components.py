@@ -16,29 +16,30 @@ def filter(traj,ids,pc_thresh=0.75,ic_thresh=1.0,fun='logcosh',algo='parallel',d
 # identify and remove outliers
     # initialize
     traj_new, ids_new = traj_slice(traj,ids)
-    it=0
-    iterate=True
-    # iterate
-    while iterate :
-        print('=================')
-        print('Iteration #',it)
-        subtitle=title+'outlier_iter'+str(it)
-        traj_old, ids_old = traj_slice(traj_new, ids_new)
-        v_ica, m_ica, x_ica = analyses(traj_old,ids_old,pc_thresh=pc_thresh,fun=fun,algo=algo,do_plot=do_plot,title=subtitle)
-        idx_remains = np.arange(len(ids_old))
-        n_outlier=0
-        for iPC in np.arange(len(x_ica[0,:])):
-            keyword=subtitle+'_IC'+str(iPC)
-            idx_remains, idx_outlier = get_outlier(x_ica[:,iPC],idx_remains,vmax=ic_thresh)
-            if(len(idx_outlier)>0):
-                save_traj(traj_old,ids_old,idx_outlier,keyword=keyword,verbose='full')
-                n_outlier+=1
-        if(n_outlier==0):
-            iterate=False
-            print('converged in ',it,' iterations')
-        else:
-            it+=1
-            traj_new, ids_new = traj_slice(traj_old, ids_old, index=idx_remains)
+    if(ic_thresh < 1.0):
+        it=0
+        iterate=True
+        # iterate
+        while iterate :
+            print('=================')
+            print('Iteration #',it)
+            subtitle=title+'outlier_iter'+str(it)
+            traj_old, ids_old = traj_slice(traj_new, ids_new)
+            v_ica, m_ica, x_ica = analyses(traj_old,ids_old,pc_thresh=pc_thresh,fun=fun,algo=algo,do_plot=do_plot,title=subtitle)
+            idx_remains = np.arange(len(ids_old))
+            n_outlier=0
+            for iPC in np.arange(len(x_ica[0,:])):
+                keyword=subtitle+'_IC'+str(iPC)
+                idx_remains, idx_outlier = get_outlier(x_ica[:,iPC],idx_remains,vmax=ic_thresh)
+                if(len(idx_outlier)>0):
+                    save_traj(traj_old,ids_old,idx_outlier,keyword=keyword,verbose='full')
+                    n_outlier+=1
+            if(n_outlier==0):
+                iterate=False
+                print('converged in ',it,' iterations')
+            else:
+                it+=1
+                traj_new, ids_new = traj_slice(traj_old, ids_old, index=idx_remains)
     return traj_new,ids_new
 
 def cluster(traj,ids,pc_thresh=0.75,fun='logcosh',algo='parallel',analysis_type='ica',do_plot=True,title=''):
@@ -54,11 +55,12 @@ def cluster(traj,ids,pc_thresh=0.75,fun='logcosh',algo='parallel',analysis_type=
     return clusters
 
 def analyses(traj,ids,pc_thresh=0.75,fun='logcosh',algo='parallel',analysis_type='ica',do_plot=True,c=None,title=''):
-# purpose: perform pca, to reduce dimensionality, then ica to identify relevant projections
-# options: 
-#   analysis_type: 'pca' or 'ica'
-#   do_plot: True or False
-#
+"""
+purpose: perform pca, to reduce dimensionality, then ica to identify relevant projections
+ options: 
+   analysis_type: 'pca' or 'ica'
+   do_plot: True or False
+"""
     v_pca, l_pca, x = traj2pc(traj, n_components=len(ids),var_trunc=pc_thresh)
     if(do_plot):
         print('Principal Component Analysis (step 0)')
@@ -78,11 +80,14 @@ def analyses(traj,ids,pc_thresh=0.75,fun='logcosh',algo='parallel',analysis_type
         return v_pca, l_pca, x
 
 def save_ICmode(traj,ids,v,m,x,nICs=np.arange(1),vmax=0.2,mode='oscillatory',exclude=True,keyword='mode',pc_thresh=0.75,verbose='minimal'):
-# purpose: write traj along iIC
-    # options:
-    # > mode: 'oscillatory': 
-    #           or 'sorted':
-    # > exclude: exclude snapshots that lie further than vrange away in any other direction
+"""
+purpose: write traj along iIC
+options:
+     > mode: 'oscillatory': 
+               or 'sorted':
+     > exclude: exclude snapshots that lie further than vrange away in any other direction
+"""
+    # we have an issue here, when traj has less than nframe... to be solved.
     nframe=20
     xyz     = traj.xyz.reshape(traj.n_frames, traj.n_atoms * 3)
     xyz_mean = np.mean(xyz, axis=0)
