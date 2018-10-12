@@ -55,12 +55,12 @@ def cluster(traj,ids,pc_thresh=0.75,fun='logcosh',algo='parallel',analysis_type=
     return clusters
 
 def analyses(traj,ids,pc_thresh=0.75,fun='logcosh',algo='parallel',analysis_type='ica',do_plot=True,c=None,title=''):
-"""
-purpose: perform pca, to reduce dimensionality, then ica to identify relevant projections
- options: 
-   analysis_type: 'pca' or 'ica'
-   do_plot: True or False
-"""
+    """
+    purpose: perform pca, to reduce dimensionality, then ica to identify relevant projections
+     options: 
+       analysis_type: 'pca' or 'ica'
+       do_plot: True or False
+    """
     v_pca, l_pca, x = traj2pc(traj, n_components=len(ids),var_trunc=pc_thresh)
     if(do_plot):
         print('Principal Component Analysis (step 0)')
@@ -80,13 +80,13 @@ purpose: perform pca, to reduce dimensionality, then ica to identify relevant pr
         return v_pca, l_pca, x
 
 def save_ICmode(traj,ids,v,m,x,nICs=np.arange(1),vmax=0.2,mode='oscillatory',exclude=True,keyword='mode',pc_thresh=0.75,verbose='minimal'):
-"""
-purpose: write traj along iIC
-options:
+    """
+    purpose: write traj along iIC
+    options:
      > mode: 'oscillatory': 
                or 'sorted':
      > exclude: exclude snapshots that lie further than vrange away in any other direction
-"""
+    """
     # we have an issue here, when traj has less than nframe... to be solved.
     nframe=20
     xyz     = traj.xyz.reshape(traj.n_frames, traj.n_atoms * 3)
