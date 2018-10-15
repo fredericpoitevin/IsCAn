@@ -3,12 +3,22 @@ from numpy import genfromtxt
 import matplotlib.pyplot as plt
 import mdtraj as md
 
-def load_dataset(filename,superpose=False):
-    ids  = load_ids(filename)
-    traj = load_traj(filename,superpose=superpose)
-    if(len(ids) != traj.n_frames):
+def load_dataset(pdb_filename,ids_filename='',superpose=False):
+    ids  = load_ids(pdb_filename)
+    traj = load_traj(pdb_filename,superpose=superpose)
+    if(ids_filename):
+        ids_keep = load_ids(ids_filename)
+        mask = np.in1d(ids,ids_keep)
+        ids_new  = ids[mask]
+        traj_new = traj[mask]
+        if(superpose):
+            traj_new.superpose(traj, 0)
+    else:
+        ids_new  = ids
+        traj_new = traj
+    if(len(ids_new) != traj_new.n_frames):
         print('Warning: load_dataset inconsistency')
-    return traj,ids
+    return traj_new,ids_new
 
 def load_ids(filename):
     line = genfromtxt(filename, max_rows=1, delimiter=' ', dtype=(str))
@@ -21,3 +31,13 @@ def load_traj(filename,superpose=False):
         traj.superpose(traj, 0)
     return traj
 
+def merge_pdb_list(filelist='',output='merged.pdb',superpose=False):
+    if(filelist):
+        with open(output,'w') as fwritten:
+            for item in filelist:
+                with open(item,'r') as fread:
+                    item_read = fread.read()
+                fwritten.write(item_read)
+                fwritten.write('ENDMDL\n')
+        traj = load_traj(output,superpose=superpose)
+        traj.save(output)

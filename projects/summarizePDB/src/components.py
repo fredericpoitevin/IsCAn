@@ -32,14 +32,14 @@ def filter(traj,ids,pc_thresh=0.75,ic_thresh=1.0,fun='logcosh',algo='parallel',d
                 keyword=subtitle+'_IC'+str(iPC)
                 idx_remains, idx_outlier = get_outlier(x_ica[:,iPC],idx_remains,vmax=ic_thresh)
                 if(len(idx_outlier)>0):
-                    save_traj(traj_old,ids_old,idx_outlier,keyword=keyword,verbose='full')
+                    save_traj(traj_old.slice(idx_outlier),ids_old[idx_outlier],keyword=keyword,verbose='full')
                     n_outlier+=1
             if(n_outlier==0):
                 iterate=False
                 print('converged in ',it,' iterations')
             else:
                 it+=1
-                traj_new, ids_new = traj_slice(traj_old, ids_old, index=idx_remains)
+                traj_new, ids_new = traj_slice(traj_old.slice(idx_remains), ids_old[idx_remains])
     return traj_new,ids_new
 
 def cluster(traj,ids,pc_thresh=0.75,fun='logcosh',algo='parallel',analysis_type='ica',do_plot=True,title=''):
@@ -94,60 +94,54 @@ def save_ICmode(traj,ids,v,m,x,nICs=np.arange(1),vmax=0.2,mode='oscillatory',exc
     v_pca, l_pca, x_pca = traj2pc(traj, n_components=len(ids),var_trunc=pc_thresh)
     xyz_ic = np.dot(v,v_pca)
     for iIC in nICs:
-        filename=keyword+'_'+mode+'_IC'+str(iIC+1)+".pdb"
+        keyword_tmp=keyword+'_'+mode+'_IC'+str(iIC+1)
+        index = get_sorted_index(x,iIC,nICs=nICs,vmax=vmax,exclude=exclude)
+        traj_tmp,ids_tmp = traj_slice(traj,ids,index=index)
         if(mode=='oscillatory'):
             traj_tmp = traj[0:nframe]
             for iframe in np.arange(0,nframe,1):
                 phase = iframe*2.*np.pi/nframe
                 traj_tmp.xyz[iframe:iframe+1,:] = 10*xyz_ic[iIC:iIC+1,:].reshape(1,traj.n_atoms,3)*np.cos(phase)
                 traj_tmp.xyz[iframe:iframe+1,:] += xyz_mean.reshape(traj.n_atoms,3)
-        elif(mode=='sorted'):
-            index = np.argsort(x[:,iIC])
-            id_kp=index
-            if(exclude):
-                for jIC in nICs:
-                    if(jIC!=iIC):
-                        id1,id2 = get_outlier(x[:,jIC],index,vmax=vmax)
-                        id1 = np.setdiff1d(id_kp,id2)
-                        id_kp = id1
-            index = np.argsort(x[id_kp,iIC])
-            traj_tmp,ids_tmp = traj_slice(traj,ids,index=index)
-        traj_tmp.save(filename) 
-        if(verbose=='full'):
-            print("wrote ",filename)
+        save_traj(traj_tmp,ids_tmp,keyword=keyword_tmp,verbose=verbose)
 
-def save_traj(traj,ids,idx,keyword='traj',save_mean=False,verbose='minimal'):
-    if(len(idx) > 0):
+def save_traj(traj,ids,keyword='traj',save_mean=False,verbose='minimal'):
+    """
+    purpose: write current state to file
+    options: 
+        > save_mean: write sample mean (default:False)
+        > verbose: 'minimal' or 'full'
+    """
+    if(len(ids) > 0):
         if(save_mean):
             filename=keyword+'_mean.pdb'
         else:
             filename=keyword+'.pdb'
         # prepare traj to be written
-        traj_new = traj.slice(idx)
         if(save_mean):
-            n_frames= traj_new.n_frames
-            n_atoms = traj_new.n_atoms
-            xyz     = traj_new.xyz.reshape(n_frames, n_atoms * 3)
+            n_frames= traj.n_frames
+            n_atoms = traj.n_atoms
+            xyz     = traj.xyz.reshape(n_frames, n_atoms * 3)
             xyz_mean = np.mean(xyz, axis=0)
             xyz_std2 = np.std(xyz, axis=0)**2
             xyz_bfac = np.sum(xyz_std2.reshape(n_atoms, 3), axis=1)*8*(np.pi)**2
-            traj_mean = traj_new[0]
+            traj_mean = traj[0]
             traj_mean.xyz = xyz_mean.reshape(n_atoms, 3)
             traj_mean.save(filename, bfactors=np.clip(xyz_bfac, -9, 99))
         else:
-            traj_new.save(filename)
+            traj.save(filename)
         # add info of ID list at beginning
         with open(filename,'r') as f:
             save = f.read()
         with open(filename, 'w') as f:
             f.write("REMARK ID list: ")
-            for item in ids[idx]:
+            for item in ids:
                 f.write("%s " % item)
             f.write('\n')
         with open(filename, 'a') as f:
             f.write(save)
         if(verbose=='full'):
-            print('wrote ',filename,' : ',ids[idx])
+            print('wrote ',filename,' : ',ids)
 
 def traj2pc(traj,n_components=1,negent_sort=False,var_trunc=-1):
     n_cmpnt = n_components
@@ -184,17 +178,13 @@ def traj2ic(x_pc,n_components=1,fun='logcosh',algo='parallel',negent_sort=True):
 # Clustering #
 ##############
 
-def cluster_split(traj,ids,l,n_clusters,title=''):
-    # get assignment
-    assignments = get_assignment(l,n_clusters) #scipy.cluster.hierarchy.fcluster(l, t=n_clusters, criterion='maxclust')
-    # do the split
+def cluster_split(traj,ids,l,n_clusters,title='',save_mean=True):
+    assignments = get_assignment(l,n_clusters) 
     for i_cluster in np.arange(1,n_clusters+1):
         keyword=title+'cluster_'+str(i_cluster)
         print('> '+keyword)
         idx_in = get_idx(assignments,vrange=[i_cluster-1,i_cluster+1])
-        save_traj(traj,ids,idx_in,keyword=keyword,verbose='full')
-        save_traj(traj,ids,idx_in,keyword=keyword,save_mean=True,verbose='full')
-
+        save_traj(traj.slice(idx_in),ids[idx_in],keyword=keyword,save_mean=save_mean,verbose='full')
 def get_assignment(l,n_clusters):
     return scipy.cluster.hierarchy.fcluster(l, t=n_clusters, criterion='maxclust')
 
@@ -208,6 +198,18 @@ def get_ncluster(l):
 #############
 # Filtering #
 #############
+
+def get_sorted_index(x,iIC=1,nICs=np.arange(1),vmax=0.2,exclude=True):
+    index = np.argsort(x[:,iIC])
+    id_kp=index
+    if(exclude):
+        for jIC in nICs:
+            if(jIC!=iIC):
+                id1,id2 = get_outlier(x[:,jIC],index,vmax=vmax)
+                id1 = np.setdiff1d(id_kp,id2)
+                id_kp = id1
+    index = np.argsort(x[id_kp,iIC])
+    return index
 
 def get_idx(x,vrange=[-0.2,0.2]):
     return [i for i,v in enumerate(x) if v > vrange[0] and v < vrange[1]]
