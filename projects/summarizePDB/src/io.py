@@ -3,12 +3,22 @@ from numpy import genfromtxt
 import matplotlib.pyplot as plt
 import mdtraj as md
 
-def load_dataset(pdb_filename,ids_filename='',superpose=False):
+def load_dataset(pdb_filename,ids_filename='',keep_mode='intersect',superpose=False):
+    """
+    purpose: load both traj and ids from file.
+    options: if ids_filename is provided, either only keep its ids (keep_mode intersect), 
+             or ignore them on the contrary (keep_mode ignore)
+    """
     ids  = load_ids(pdb_filename)
     traj = load_traj(pdb_filename,superpose=superpose)
     if(ids_filename):
         ids_keep = load_ids(ids_filename)
-        mask = np.in1d(ids,ids_keep)
+        if(keep_mode=='intersect'):
+            mask = np.in1d(ids,ids_keep)
+        elif(keep_mode=='ignore'):
+            mask = np.logical_not(np.in1d(ids,ids_keep))
+        else:
+            print("Error...")
         ids_new  = ids[mask]
         traj_new = traj[mask]
         if(superpose):

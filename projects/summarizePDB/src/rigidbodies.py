@@ -5,8 +5,8 @@ import scipy.spatial as sp_spatial
 import scipy.cluster as sp_cluster
 from sklearn import cluster as sl_cluster
 #
-def cluster(traj,method='ward',n_clusters=2):
-    fluct,dist = get_distance_fluctuation(traj)
+def cluster(traj,method='ward',n_clusters=2,frame_range=''):
+    fluct,dist = get_distance_fluctuation(traj,frame_range=frame_range)
     if(method=='ward'):
         clusters = sp_cluster.hierarchy.linkage(fluct, method='ward')
         return clusters
@@ -39,7 +39,7 @@ def filter_assignment(traj,assignment,wsize=10):
 
 #
 def clean_assignment(traj,assignment,wsize=10):
-    ires = get_residue_id(traj)
+    #ires = get_residue_id(traj)
     ass_new = assignment
     for i in np.arange(int(wsize/2),traj.n_atoms-int(wsize/2)):
         ilo = i - int(wsize/2)
@@ -52,15 +52,17 @@ def clean_assignment(traj,assignment,wsize=10):
 def save_cluster_in_bfac(traj,filename,assignment):
     traj.save(filename, bfactors=assignment)
 #
-def get_distance_fluctuation(traj):
+def get_distance_fluctuation(traj,frame_range=''):
     nframes = traj.n_frames
     natoms  = traj.n_atoms
     ndist   = int(natoms*(natoms-1)/2)
+    if(frame_range==''):
+        frame_range = np.arange(nframes)
     #
     xyz = traj.xyz.reshape(nframes, natoms * 3)
     dist1 = np.zeros(ndist)
     dist2 = np.zeros(ndist)
-    for iframe in np.arange(nframes):
+    for iframe in frame_range: #np.arange(nframes):
         dist0   = sp_spatial.distance.pdist(xyz[iframe,:].reshape(natoms,3), metric='euclidean')
         dist1  += dist0
         dist2  += dist0**2
