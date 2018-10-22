@@ -1,5 +1,0 @@
--rw-r--r--@ 1 fpoitevi  staff   30266196 Oct 11 18:05 ribosome_mammal.pdb
--rw-r--r--@ 1 fpoitevi  staff   17098067 Oct 11 18:05 ribosome_mammal_ssu.pdb
--rw-r--r--@ 1 fpoitevi  staff  168961369 Oct 11 18:05 ribosome_thermo.pdb
--rw-r--r--@ 1 fpoitevi  staff  120487280 Oct 11 18:05 ribosome_thermo_ssu.pdb
--rw-r--r--  1 fpoitevi  staff   32822037 Oct 11 17:48 rnapol2_scerevisae.pdb
