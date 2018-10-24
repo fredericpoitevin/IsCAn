@@ -7,6 +7,7 @@ relpath="$(dirname $0)/lib_viz"
 #
 # PREPARE LOCAL TREE #
 if [ -d figs ]; then echo "a figs/ directory is already here. Abort."; exit; fi
+rm -rf .tmp
 mkdir figs
 cd figs
 mkdir jpgs

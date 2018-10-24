@@ -4,10 +4,17 @@ import matplotlib.pyplot as plt
 import mdtraj as md
 
 def load_dataset(pdb_filename,ids_filename='',keep_mode='intersect',superpose=False):
-    """
-    purpose: load both traj and ids from file.
-    options: if ids_filename is provided, either only keep its ids (keep_mode intersect), 
-             or ignore them on the contrary (keep_mode ignore)
+    """ load_dataset 
+
+    Description
+    -----------
+    Loads the content of a PDB file containing a trajectory.
+    Careful: the file needs to have as its irst line a "REMARK ID list:" tag followed by a list of names (or ids) for each of the frame
+    
+    Parameters
+    ----------
+    - ids_filename:  if provided, either only keep its ids (keep_mode intersect), or ignore them on the contrary (keep_mode ignore)
+
     """
     ids  = load_ids(pdb_filename)
     traj = load_traj(pdb_filename,superpose=superpose)
@@ -31,11 +38,15 @@ def load_dataset(pdb_filename,ids_filename='',keep_mode='intersect',superpose=Fa
     return traj_new,ids_new
 
 def load_ids(filename):
+    """ load_ids : 
+    """
     line = genfromtxt(filename, max_rows=1, delimiter=' ', dtype=(str))
     cif_id = line[3:len(line)]
     return cif_id
 
 def load_traj(filename,superpose=False):
+    """ load_traj : 
+    """
     traj = md.load(filename)
     if(superpose):
         traj.superpose(traj, 0)

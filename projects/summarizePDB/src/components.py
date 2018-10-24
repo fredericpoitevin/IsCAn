@@ -1,5 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib import gridspec
+from matplotlib.ticker import MultipleLocator
 from msmbuilder.decomposition import tICA, PCA
 from sklearn.decomposition import FastICA
 from sklearn.preprocessing import normalize
@@ -144,7 +146,7 @@ def analyses(traj,ids,pc_thresh=0.75,fun='logcosh',algo='parallel',analysis_type
     x = x_pca
     if(do_plot):
         print('Principal Component Analysis (step 0)')
-        score = score_mode(traj,ids,v=None,pc_thresh=pc_thresh)
+        score = score_mode(traj,ids,v=None,pc_thresh=pc_thresh,analysis_type='pca')
         plot_stats_CA(x_pca,l_pca,len(l_pca),score=score,threshold=0,analysis_type='pca',figname=title)
     if(analysis_type == 'ica'):
         v_ica, m_ica, x_ica = traj2ic(x_pca,n_components=len(l_pca),fun=fun,algo=algo)
@@ -161,7 +163,7 @@ def analyses(traj,ids,pc_thresh=0.75,fun='logcosh',algo='parallel',analysis_type
     else:
         return v_pca, l_pca, x_pca
 
-def save_mode(traj,ids,prj,n=np.arange(1),v=None,pc_thresh=0.75,keyword='mode',movie='oscillatory',nframe=20,verbose='minimal'):
+def save_mode(traj,ids,prj,n=np.arange(1),v=None,pc_thresh=0.75,keyword='mode',movie='oscillatory',nframe=20,verbose='minimal',analysis_type='ica'):
     """ save_mode : writes PDB file with information on a component mode
 
     Description
@@ -174,13 +176,13 @@ def save_mode(traj,ids,prj,n=np.arange(1),v=None,pc_thresh=0.75,keyword='mode',m
         . 'sorted' (not implemented yet - see options in function 'get_sorted_index')
         . 'projected' (not implemented yet)
     """
-    if v is None:
+    if(analysis_type=='pca'):
         mode_type='PC'
     else:
         mode_type='IC'
     key=keyword+'_'+movie+'_'+mode_type
     xyz_mean, b_factors = get_xyz_mean(traj)
-    xyz_mode = get_mode(traj, ids, v=v, pc_thresh=pc_thresh)
+    xyz_mode = get_mode(traj, ids, v=v, pc_thresh=pc_thresh,analysis_type=analysis_type)
     for ic in n:
         index = get_sorted_index(prj,ic,nICs=n)
         traj_IC, ids_IC = traj_slice(traj,ids,index=index)
@@ -193,7 +195,7 @@ def save_mode(traj,ids,prj,n=np.arange(1),v=None,pc_thresh=0.75,keyword='mode',m
                 traj_IC.xyz[iframe:iframe+1,:] += xyz_mean.reshape(traj.n_atoms,3)
         save_traj(traj_IC,ids_IC,keyword=key+str(ic+1),verbose=verbose)
 
-def get_mode(traj,ids,v=None,pc_thresh=0.75):
+def get_mode(traj,ids,v=None,pc_thresh=0.75,analysis_type='ica'):
     """ get_mode : returns mode along one component.
     
     Description
@@ -205,24 +207,20 @@ def get_mode(traj,ids,v=None,pc_thresh=0.75):
 
     Parameters
     ----------
-    If v is None, then we output the PC modes. 
+    If analysis_type=='pca', then we output the PC modes. 
     Otherwise, v is assumed to be the unmixing matrix pre-computed with ICA.
     """
     v_pca, l_pca, x_pca = traj2pc(traj, n_components=len(ids),var_trunc=pc_thresh)
     xyz_mode = np.dot(np.diag(l_pca),v_pca)
-    if v is not None:
+    if(analysis_type=='ica'):
         xyz_mode = np.dot(v,xyz_mode)
     return xyz_mode
 
-def score_mode(traj,ids,v=None,pc_thresh=0.75,score_type='elasticity'):
+def score_mode(traj,ids,v=None,pc_thresh=0.75,score_type='elasticity',analysis_type='ica'):
     """ score_mode
     """
-    if v is None:
-        mode_type='PC'
-    else:
-        mode_type='IC'
     xyz_mean, b_factors = get_xyz_mean(traj)
-    xyz_mode = get_mode(traj, ids, v=v, pc_thresh=pc_thresh)
+    xyz_mode = get_mode(traj, ids, v=v, pc_thresh=pc_thresh,analysis_type=analysis_type)
     n = xyz_mode.shape[0]
     mode_score = np.zeros(n)
     for ic in np.arange(0,n,1):
@@ -296,7 +294,9 @@ def save_traj(traj,ids,keyword='traj',save_mean=False,verbose='minimal'):
             filename=keyword+'.pdb'
         write_trj_to_file(filename,traj,save_mean=save_mean)
         write_ids_to_file(filename,ids)
-        if(verbose=='full'):
+        if(verbose=='intermediate'):
+            print('wrote ',filename)
+        elif(verbose=='full'):
             print('wrote ',filename,' : ',ids)
 
 def write_trj_to_file(filename,traj,save_mean=False):
@@ -544,6 +544,7 @@ def biplots(prj,prj2=None,n=1,plottype='hexbin',nbins=10,figsize=-1,c=None,figna
     The possibility to color based on input assignment is offered.
 
     """
+    show_histo=False
     if c is not None:
         plottype='scatter'
     if(plottype=='scatter'):
@@ -556,67 +557,152 @@ def biplots(prj,prj2=None,n=1,plottype='hexbin',nbins=10,figsize=-1,c=None,figna
         else:
             figsize=4
     figsize=figsize*6
-    labels = get_labels(n) 
-    fig = plt.figure(figsize=(figsize,figsize), dpi= 160, facecolor='w', edgecolor='k')
+    labels = get_labels(n)
     nrow=n
     ncol=n
+    gs = gridspec.GridSpec(nrow, ncol, hspace=0, wspace=0)
+    minorticklocator = MultipleLocator(0.1)
+    majorticklocator = MultipleLocator(0.2)
+    fig = plt.figure(figsize=(figsize,figsize), dpi= 160, facecolor='w', edgecolor='k')
     nbins_coarse = int(nbins/1)
-    nbox=1 
-    for i in np.arange(0,n,1):
-        for j in np.arange(0,n,1):
+    for i in np.arange(0,nrow,1):
+        for j in np.arange(0,ncol,1):
             if(i<j):
-                ax = fig.add_subplot(nrow,ncol,nbox)
-                plt.grid()
-                #if(j<n):
-                if(i == 0):
-                    ax.set_xlabel(labels[j])   
-                if(j == n - 1):
-                    ax.set_ylabel(labels[i])
-                ax.xaxis.tick_top()
-                ax.yaxis.tick_right()
-                ax.xaxis.set_label_position('top')
-                ax.yaxis.set_label_position('right')
-                Ax = prj[:,j]
-                Ay = prj[:,i]
-                if(plottype == 'scatter'):
-                    plt.scatter(Ax, Ay, c=c, cmap=cmap)
-                else:
-                    plt.hexbin(Ax, Ay, gridsize=nbins, cmap=cmap, mincnt=1)
+                ax = biplot_axis(n,i,j,gs,fig,labels,Ax=prj[:,j],Ay=prj[:,i],c=c,cmap=cmap,nbins=nbins,majortick=0.2,minortick=0.1,linewidth=2.5,plottype=plottype)
             elif(i==j):
-                ax = fig.add_subplot(nrow,ncol,nbox)
-                plt.grid()
-                Ax = prj[:,i]
-                plt.hist(Ax,bins=nbins_coarse)
-                if prj2 is not None:
-                    Ay = prj2[:,i]
-                    plt.hist(Ay,bins=nbins_coarse,rwidth=0.4)
-            else:
-                if prj2 is None:
-                    if(i == 1):
-                        if(j == 0):
-                            ax = fig.add_subplot(nrow,ncol,nbox)
-                            ax.set_xlabel('cluster color')
-                            xy = range(1,np.max(c)+1,1)
-                            sc = plt.scatter(xy, xy, c=xy, vmin=1, vmax=np.max(c), cmap=cmap)
-                            plt.colorbar(sc)
-                else:
-                    ax = fig.add_subplot(nrow,ncol,nbox)
+                if(show_histo):
+                    ax = fig.add_subplot(gs[i,j])
                     plt.grid()
-                    if(j == 0):
-                        ax.set_ylabel(labels[i])
-                    if(i == n - 1):
-                        ax.set_xlabel(labels[j])
-                    Ax = prj2[:,j]
-                    Ay = prj2[:,i]
-                    if(plottype == 'scatter'):
-                        plt.scatter(Ax, Ay, c=c, cmap=cmap)
-                    else:
-                        plt.hexbin(Ax, Ay, gridsize=nbins, cmap=cmap, mincnt=1)
-            nbox=nbox+1
+                    plt.tick_params(axis='both', which='both',bottom=False,top=False,left=False,right=False,labelbottom=False,labeltop=False,labelleft=False,labelright=False)
+                    Ax = prj[:,i]
+                    plt.hist(Ax,bins=nbins_coarse)
+                    if prj2 is not None:
+                        Ay = prj2[:,i]
+                        plt.hist(Ay,bins=nbins_coarse,rwidth=0.4)
+                else:
+                    if(i==0 and c is not None):
+                        ax = fig.add_subplot(gs[i,j])
+                        ax.set_xlabel(labels[j],fontsize='xx-large')
+                        ax.set_ylabel(labels[i],fontsize='xx-large')
+                        ax.xaxis.set_label_position('top')
+                        for corner in ('top','bottom','right','left'):
+                            ax.spines[corner].set_linewidth(0)
+                        ax.tick_params(axis='both', which='both',bottom=False,top=False,left=False,right=False,labelbottom=False,labeltop=False,labelleft=False,labelright=False,labelsize='large')
+                        colorbar = range(1,np.max(c)+1,1)
+                        ax.scatter(colorbar, colorbar, c=colorbar, vmin=1, vmax=np.max(c), cmap=cmap)
+                        for idx, txt in enumerate(colorbar):
+                            ax.annotate(txt,(colorbar[idx],colorbar[idx]))
+            else:
+                ax = biplot_axis(n,i,j,gs,fig,labels,Ax=prj2[:,j],Ay=prj2[:,i],c=c,cmap=cmap,nbins=nbins,majortick=0.2,minortick=0.1,linewidth=2.5,plottype=plottype)
     plt.tight_layout()
     plt.show()
     if(figname):
         fig.savefig(figname+'_biplot.png')
+
+def biplot_axis(n,i,j,gs,fig,labels,Ax=np.zeros(1),Ay=np.zeros(1),c=None,cmap=None,nbins=1,majortick=0.2,minortick=0.1,linewidth=2.5,plottype='scatter'):
+    minorticklocator = MultipleLocator(minortick)
+    majorticklocator = MultipleLocator(majortick)
+    ax = fig.add_subplot(gs[i,j])
+    ax.xaxis.set_minor_locator(minorticklocator)
+    ax.xaxis.set_major_locator(majorticklocator)
+    ax.yaxis.set_minor_locator(minorticklocator)
+    ax.yaxis.set_major_locator(majorticklocator)
+    for corner in ('top','bottom','right','left'):
+        ax.spines[corner].set_linewidth(linewidth)
+    ax.minorticks_on()
+    ax.grid(which='major',axis='both',linestyle='-',linewidth=0.5)
+    ax.grid(which='minor',axis='both',linestyle='--',linewidth=0.1)
+    ax.axvline(0, linestyle=':', linewidth=2, color='k')
+    ax.axhline(0, linestyle=':', linewidth=2, color='k')
+    if(i == 0 and j != n-1):
+        ax.set_xlabel(labels[j],fontsize='xx-large')
+        ax.xaxis.set_label_position('top')
+        if(j==1):
+            ax.tick_params(axis='both', which='both',bottom=False,top=False,left=True,right=False,labelbottom=False,labeltop=False,labelleft=True,labelright=False,labelsize='large')
+        else:
+            ax.tick_params(axis='both', which='both',bottom=False,top=False,left=False,right=False,labelbottom=False,labeltop=False,labelleft=False,labelright=False,labelsize='large')
+    elif(i == 0 and j == n-1):
+        ax.set_xlabel(labels[j],fontsize='xx-large')
+        #ax.set_ylabel(labels[i],fontsize='xx-large',rotation=270)
+        ax.xaxis.set_label_position('top')
+        #ax.yaxis.set_label_position('right')
+        ax.tick_params(axis='both', which='both',bottom=False,top=False,left=False,right=False,labelbottom=False,labeltop=False,labelleft=False,labelright=False,labelsize='large')
+    elif(i != 0 and j == n-1):
+        #ax.set_ylabel(labels[i],fontsize='xx-large',rotation=270)
+        #ax.yaxis.set_label_position('right')
+        ax.tick_params(axis='both', which='both',bottom=False,top=False,left=False,right=False,labelbottom=False,labeltop=False,labelleft=False,labelright=False,labelsize='large')
+    elif(i < j and i != 0 and j != n-1):
+        ax.tick_params(axis='both', which='both',bottom=False,top=False,left=False,right=False,labelbottom=False,labeltop=False,labelleft=False,labelright=False,labelsize='large')
+    if(j == 0 and i != n-1 ):
+        ax.set_ylabel(labels[i],fontsize='xx-large')
+        if(i==1):
+            ax.xaxis.set_label_position('top')
+            ax.tick_params(axis='both', which='both',bottom=False,top=True,left=False,right=False,labelbottom=False,labeltop=True,labelleft=False,labelright=False,labelsize='large')
+        else:
+            ax.tick_params(axis='both', which='both',bottom=False,top=False,left=False,right=False,labelbottom=False,labeltop=False,labelleft=False,labelright=False,labelsize='large')
+    elif(j == 0 and i == n - 1):
+        #ax.set_xlabel(labels[j],fontsize='xx-large')
+        ax.set_ylabel(labels[i],fontsize='xx-large')
+        ax.tick_params(axis='both', which='both',bottom=False,top=False,left=False,right=False,labelbottom=False,labeltop=False,labelleft=False,labelright=False,labelsize='large')
+    elif(j != 0 and i == n-1 ):
+        #ax.set_xlabel(labels[j],fontsize='xx-large')
+        ax.tick_params(axis='both', which='both',bottom=False,top=False,left=False,right=False,labelbottom=False,labeltop=False,labelleft=False,labelright=False,labelsize='large')
+    elif(j < i and j !=0 and i != n-1):
+        ax.tick_params(axis='both', which='both',bottom=False,top=False,left=False,right=False,labelbottom=False,labeltop=False,labelleft=False,labelright=False,labelsize='large')
+    if(plottype == 'scatter'):
+        ax.scatter(Ax, Ay, c=c, cmap=cmap)
+    else:
+        ax.hexbin(Ax, Ay, gridsize=nbins, cmap=cmap, mincnt=1)
+    return ax
+
+def biplot_axis0(n,i,j,gs,fig,labels,Ax=np.zeros(1),Ay=np.zeros(1),c=None,cmap=None,nbins=1,majortick=0.2,minortick=0.1,linewidth=2.5,plottype='scatter'):
+    minorticklocator = MultipleLocator(minortick)
+    majorticklocator = MultipleLocator(majortick)
+    ax = fig.add_subplot(gs[i,j])
+    ax.xaxis.set_minor_locator(minorticklocator)
+    ax.xaxis.set_major_locator(majorticklocator)
+    ax.yaxis.set_minor_locator(minorticklocator)
+    ax.yaxis.set_major_locator(majorticklocator)
+    for corner in ('top','bottom','right','left'):
+        ax.spines[corner].set_linewidth(linewidth)
+    ax.minorticks_on()
+    ax.grid(which='major',axis='both',linestyle='-',linewidth=0.5)
+    ax.grid(which='minor',axis='both',linestyle='--',linewidth=0.1)
+    ax.axvline(0, linestyle=':', linewidth=2, color='k')
+    ax.axhline(0, linestyle=':', linewidth=2, color='k')
+    if(i == 0 and j != n-1):
+        ax.set_xlabel(labels[j],fontsize='xx-large')
+        ax.xaxis.set_label_position('top')
+        ax.tick_params(axis='both', which='both',bottom=False,top=True,left=False,right=False,labelbottom=False,labeltop=True,labelleft=False,labelright=False,labelsize='large')
+    elif(i == 0 and j == n-1):
+        ax.set_xlabel(labels[j],fontsize='xx-large')
+        ax.set_ylabel(labels[i],fontsize='xx-large',rotation=270)
+        ax.xaxis.set_label_position('top')
+        ax.yaxis.set_label_position('right')
+        ax.tick_params(axis='both', which='both',bottom=False,top=True,left=False,right=True,labelbottom=False,labeltop=True,labelleft=False,labelright=True,labelsize='large')
+    elif(i != 0 and j == n-1):
+        ax.set_ylabel(labels[i],fontsize='xx-large',rotation=270)
+        ax.yaxis.set_label_position('right')
+        ax.tick_params(axis='both', which='both',bottom=False,top=False,left=False,right=True,labelbottom=False,labeltop=False,labelleft=False,labelright=True,labelsize='large')
+    elif(i < j and i != 0 and j != n-1):
+        ax.tick_params(axis='both', which='both',bottom=False,top=False,left=False,right=False,labelbottom=False,labeltop=False,labelleft=False,labelright=False,labelsize='large')
+    if(j == 0 and i != n-1 ):
+        ax.set_ylabel(labels[i],fontsize='xx-large')
+        ax.tick_params(axis='both', which='both',bottom=False,top=False,left=True,right=False,labelbottom=False,labeltop=False,labelleft=True,labelright=False,labelsize='large')
+    elif(j == 0 and i == n - 1):
+        ax.set_xlabel(labels[j],fontsize='xx-large')
+        ax.set_ylabel(labels[i],fontsize='xx-large')
+        ax.tick_params(axis='both', which='both',bottom=True,top=False,left=True,right=False,labelbottom=True,labeltop=False,labelleft=True,labelright=False,labelsize='large')
+    elif(j != 0 and i == n-1 ):
+        ax.set_xlabel(labels[j],fontsize='xx-large')
+        ax.tick_params(axis='both', which='both',bottom=True,top=False,left=False,right=False,labelbottom=True,labeltop=False,labelleft=False,labelright=False,labelsize='large')
+    elif(j < i and j !=0 and i != n-1):
+        ax.tick_params(axis='both', which='both',bottom=False,top=False,left=False,right=False,labelbottom=False,labeltop=False,labelleft=False,labelright=False,labelsize='large')
+    if(plottype == 'scatter'):
+        ax.scatter(Ax, Ay, c=c, cmap=cmap)
+    else:
+        ax.hexbin(Ax, Ay, gridsize=nbins, cmap=cmap, mincnt=1)
+    return ax
 
 def plot_stats_CA(prj,l,n_components=1,score=None,fun='logcosh',threshold=0.9,niter=100,span=True,figsize=-1,analysis_type='ica',figname=''):
     """ plot_stats_CA : ...
@@ -734,7 +820,7 @@ def plot_mixing(m_ica):
 def get_labels(n):
     labels = []
     for i in np.arange(0,n,1):
-        labels.append('v'+str(i+1))
+        labels.append('# '+str(i+1))
     return labels
 
 ##############
