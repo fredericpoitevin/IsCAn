@@ -228,7 +228,7 @@ def score_mode(traj,ids,v=None,pc_thresh=0.75,score_type='elasticity',analysis_t
         mode_score[ic] = score
     return mode_score
 
-def compute_mode_score(xyz,mean=None,score_type='harmonicity'):
+def compute_mode_score(xyz,mean=None,score_type='harmonicity',neighbour_radius=5.0):
     """ compute_mode_score: provide some energy score per mode
 
     Arguments
@@ -241,7 +241,7 @@ def compute_mode_score(xyz,mean=None,score_type='harmonicity'):
     if(score_type=='harmonicity'):
         score = compute_harmonic_score(xyz)
     else:
-        score = compute_elastic_score(xyz,mean=mean)
+        score = compute_elastic_score(xyz,mean=mean,neighbour_radius=neighbour_radius)
     return score
 
 def compute_harmonic_score(xyz):
@@ -260,7 +260,7 @@ def compute_harmonic_score(xyz):
     score = -0.5*score
     return score
 
-def compute_elastic_score(xyz,mean=None):
+def compute_elastic_score(xyz,mean=None,neighbour_radius=5.0):
     """ compute_elastic_score :
     mean should not be None, but maybe something could be worked out for that case too...
 
@@ -277,7 +277,7 @@ def compute_elastic_score(xyz,mean=None):
     dist0 = scipy.spatial.distance.pdist(mean.reshape(natoms,3), metric='euclidean')
     xyz = mean + xyz
     dist1 = scipy.spatial.distance.pdist(xyz.reshape(natoms,3), metric='euclidean')
-    dist0_masked = np.ma.masked_where(dist0>5, dist0)
+    dist0_masked = np.ma.masked_where(dist0 > neighbour_radius, dist0)
     dist0_kept = np.ma.compressed(dist0_masked)
     dist1_masked = np.ma.masked_array(dist1, dist0_masked.mask)
     dist1_kept = np.ma.compressed(dist1_masked)
@@ -807,15 +807,17 @@ def plot_cluster(clusters,x,figsize=12,figname=''):
         fig.savefig(figname+'_cluster.png')
 
 
-def plot_mixing(m_ica):
-    plt.figure(figsize=(12, 6), dpi= 160, facecolor='w', edgecolor='k')
-    plt.title('mixing matrix')
-    plt.xlabel('IC')
-    plt.ylabel('PC')
-    plt.imshow(m_ica,cmap='plasma')
+def plot_matrix(matrix,title='',xlabel='',ylabel='',cmap='plasma',figname=''):
+    fig = plt.figure(figsize=(12, 12), dpi= 160, facecolor='w', edgecolor='k')
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.imshow(matrix,cmap=cmap)
     plt.colorbar()
     plt.tight_layout()
     plt.show()
+    if(figname):
+        fig.savefig(figname+'.png')
 
 def get_labels(n):
     labels = []
