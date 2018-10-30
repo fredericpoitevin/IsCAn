@@ -5,7 +5,7 @@ import mdtraj as md
 import scipy
 import scipy.spatial
 
-def load_dataset(pdb_filename,ids_filename='',keep_mode='intersect',superpose=False,pdb_clean=False,neighbour_cutoff=5.0,Nsigma=3):
+def load_dataset(pdb_filename,ids_filename='',keep_mode='intersect',superpose=False,pdb_clean=False,neighbour_cutoff=5.0,Nsigma=1):
     """ load_dataset 
 
     Description
@@ -25,7 +25,7 @@ def load_dataset(pdb_filename,ids_filename='',keep_mode='intersect',superpose=Fa
 
     """
     ids  = load_ids(pdb_filename)
-    traj = load_traj(pdb_filename,superpose=superpose,pdb_clean=pdb_clean,neighbour_cutoff=neighbour_cutoff,Nsigma=3)
+    traj = load_traj(pdb_filename,superpose=superpose,pdb_clean=pdb_clean,neighbour_cutoff=neighbour_cutoff,Nsigma=Nsigma)
     if(ids_filename):
         ids_keep = load_ids(ids_filename)
         if(keep_mode=='intersect'):
@@ -52,28 +52,28 @@ def load_ids(filename):
     cif_id = line[3:len(line)]
     return cif_id
 
-def load_traj(filename,superpose=False,pdb_clean=False,neighbour_cutoff=5.0,Nsigma=3):
+def load_traj(filename,superpose=False,pdb_clean=False,neighbour_cutoff=5.0,Nsigma=1):
     """ load_traj : 
     """
     traj = md.load(filename)
     if(superpose):
         traj.superpose(traj, 0)
     if(pdb_clean):
-        traj = clean_pdb(traj,neighbour_cutoff=neighbour_cutoff,Nsigma=3)
+        traj = clean_pdb(traj,neighbour_cutoff=neighbour_cutoff,Nsigma=Nsigma)
     return traj
 
-def clean_pdb(traj,neighbour_cutoff=5.0,Nsigma=3):
+def clean_pdb(traj,neighbour_cutoff=5.0,Nsigma=1):
     """ pdb_clean
     """
     print("Initial number of atoms ",traj.n_atoms)
     traj.superpose(traj, 0)
-    atom_indices = pdb_clean_get_atom_indices(traj,neighbour_cutoff=neighbour_cutoff,Nsigma=3)
+    atom_indices = pdb_clean_get_atom_indices(traj,neighbour_cutoff=neighbour_cutoff,Nsigma=Nsigma)
     traj.atom_slice(atom_indices,inplace=True)
     traj.superpose(traj, 0)
     print("... after cleaning: ",traj.n_atoms)
     return traj
 
-def pdb_clean_get_atom_indices(traj,neighbour_cutoff=5.0,Nsigma=3):
+def pdb_clean_get_atom_indices(traj,neighbour_cutoff=5.0,Nsigma=1):
     """ pdb_clean_get_atom_indices
 
     Description
@@ -102,6 +102,8 @@ def pdb_clean_get_atom_indices(traj,neighbour_cutoff=5.0,Nsigma=3):
     for i in np.arange(0,traj.n_atoms,1):
         if(scores[i] < score_cutoff):
             indices.append(i)
+    traj.save('see_atom_elastic_score.pdb',bfactors=np.clip(scores, -9, 99))
+    print("Check out scores in see_atom_elastic_score.pdb")
     return indices
 
 def get_i_neigh(traj,i,neighbour_cutoff=5.0):

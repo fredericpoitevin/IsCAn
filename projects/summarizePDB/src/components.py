@@ -184,7 +184,7 @@ def save_mode(traj,ids,prj,n=np.arange(1),v=None,pc_thresh=0.75,keyword='mode',m
     xyz_mean, b_factors = get_xyz_mean(traj)
     xyz_mode = get_mode(traj, ids, v=v, pc_thresh=pc_thresh,analysis_type=analysis_type)
     for ic in n:
-        index = get_sorted_index(prj,ic,nICs=n)
+        index = get_sorted_index(prj,iIC=ic,nICs=n)
         traj_IC, ids_IC = traj_slice(traj,ids,index=index)
         if(movie=='oscillatory'):
             traj_IC = traj[0:nframe]
@@ -376,16 +376,16 @@ def get_assignment(l,n_clusters):
 # Filtering #
 #############
 
-def get_sorted_index(x,iIC=1,nICs=np.arange(1),vmax=0.2,exclude=True):
+def get_sorted_index(x,iIC=1,nICs=np.arange(1),vmax=0.2,exclude=False):
     index = np.argsort(x[:,iIC])
-    id_kp=index
     if(exclude):
+        id_kp=index
         for jIC in nICs:
             if(jIC!=iIC):
                 id1,id2 = get_outlier(x[:,jIC],index,vmax=vmax)
                 id1 = np.setdiff1d(id_kp,id2)
                 id_kp = id1
-    index = np.argsort(x[id_kp,iIC])
+        index = np.argsort(x[id_kp,iIC])
     return index
 
 def get_idx(x,vrange=[-0.2,0.2]):
