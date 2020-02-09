@@ -3,7 +3,7 @@
 # RETRIEVE ARGUMENTS #
 if [ $# -ne 1 ]; then echo "please provide name of reference mean file"; exit;fi
 ref=$1
-relpath="$(dirname $0)/lib_viz"
+relpath="$(dirname $0)"
 #
 # PREPARE LOCAL TREE #
 if [ -d figs ]; then echo "a figs/ directory is already here. Abort."; exit; fi
