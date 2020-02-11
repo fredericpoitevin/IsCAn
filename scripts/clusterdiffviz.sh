@@ -11,10 +11,11 @@ modevectors ref,target,atom=P,cutoff=2,factor=1,tail=0.5,tailrgb=[0,0,0],head=1.
 set orthoscopic
 bg_color white
 set specular, off
-set ribbon_width, 0.5
-set ribbon_trace_atoms
+#set ribbon_width, 0.5
+#set ribbon_trace_atoms
 hide nonbonded
-as ribbon, ref
+#as ribbon, ref
+as spheres, ref
 util.cbc
 orient
 zoom center, 150

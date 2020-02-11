@@ -26,13 +26,14 @@ cd ../
 for file in *oscill*.pdb
 do
   #### X Y Z views of the component in porcupine style
-  echo "> modeviz $file"
-  "$relpath"/modeviz.sh $file
-  mv view0.jpg ./figs/jpgs/components/${file%.*}".jpg"
-  for png in 1 2 3
-  do
-    mv view${png}.png ./figs/pngs/components/${file%.*}"_"view${png}.png
-  done
+  # skip for now #
+  #echo "> modeviz $file"
+  #"$relpath"/modeviz.sh $file
+  #mv view0.jpg ./figs/jpgs/components/${file%.*}".jpg"
+  #for png in 1 2 3
+  #do
+  #  mv view${png}.png ./figs/pngs/components/${file%.*}"_"view${png}.png
+  #done
   #### make gif and mp4
   echo "> mode_movie $file"
   "$relpath"/mode_movie.sh $file

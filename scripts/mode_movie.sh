@@ -17,10 +17,11 @@ cat << EOF >> $pml
 set orthoscopic
 bg_color white
 set specular, off
-set ribbon_width, 0.5
-set ribbon_trace_atoms
+#set ribbon_width, 0.5
+#set ribbon_trace_atoms
 hide nonbonded
-as ribbon
+#as ribbon
+as spheres
 util.cbc
 orient
 zoom center, 150
@@ -34,7 +35,8 @@ do
   else
     n="00"$i
   fi
-  echo "show ribbon, traj_$n" >> $pml
+  echo "show spheres, traj_$n" >> $pml
+  #echo "show ribbon, traj_$n" >> $pml
   echo "ray 1200,1200" >> $pml
   echo "png ${jobdir}/movie1_${n}.png" >> $pml
 done
@@ -47,7 +49,8 @@ do
   else
     n="00"$i
   fi
-  echo "show ribbon, traj_$n" >> $pml
+  echo "show spheres, traj_$n" >> $pml
+  #echo "show ribbon, traj_$n" >> $pml
   echo "ray 1200,1200" >> $pml
   echo "png ${jobdir}/movie2_${n}.png" >> $pml
 done
@@ -60,7 +63,8 @@ do
   else
     n="00"$i
   fi
-  echo "show ribbon, traj_$n" >> $pml
+  echo "show spheres, traj_$n" >> $pml
+  #echo "show ribbon, traj_$n" >> $pml
   echo "ray 1200,1200" >> $pml
   echo "png ${jobdir}/movie3_${n}.png" >> $pml
 done

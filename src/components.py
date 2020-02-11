@@ -2,8 +2,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib import gridspec
 from matplotlib.ticker import MultipleLocator
-from msmbuilder.decomposition import tICA, PCA
-from sklearn.decomposition import FastICA
+#from msmbuilder.decomposition import tICA, PCA
+from sklearn.decomposition import FastICA, PCA
 from sklearn.preprocessing import normalize
 import scipy
 import scipy.spatial
@@ -122,7 +122,7 @@ def get_distance(traj,ids,analysis_type='ica',pc_thresh=0.75,fun='logcosh',algo=
         atype='ica'
     v,m,x = analyses(traj,ids,pc_thresh=pc_thresh,fun=fun,algo=algo,analysis_type=atype,do_plot=False)
     if(analysis_type=='pca'):
-        weight = m
+        weight = m #**2
     else:
         negent_ave, negent_var = ave_score(x,len(x[0,:]),fun=fun)
         weight = negent_var
@@ -468,7 +468,7 @@ def get_svd(traj):
     U,s,Vh = linalg.svd(traj)
     return U,s,Vh
 
-def get_pca(traj,n_components=1):
+def get_pca(traj,n_components=1,output='singular'):
     """ get_pca : Principal Component Analysis
     Returns
     -------
@@ -476,8 +476,13 @@ def get_pca(traj,n_components=1):
     pca.singular_values_ : (n_components)
     """
     pca = PCA(n_components=n_components,svd_solver='full')
-    pca.fit([traj])
-    return pca.components_, pca.singular_values_
+    #pca.fit([traj])
+    pca.fit(traj)
+    if(output=='variance'):
+        weight = pca.explained_variance_
+    else:
+        weight = pca.singular_values_
+    return pca.components_, weight #pca.singular_values_
 
 def get_ica(traj,n_components=1,fun='logcosh'):
     """ get_ica : Independent Component Analysis

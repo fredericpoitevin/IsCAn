@@ -1,5 +1,5 @@
 """
-setup.py: Install PDBClean
+setup.py: Install IsCAn
 """
 
 import os
